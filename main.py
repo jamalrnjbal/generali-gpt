@@ -3,14 +3,10 @@ from dotenv import load_dotenv, find_dotenv
 import os
 from openai import OpenAI
 from gpt import GPT, FirstNotificationOfLoss
-import json
+import pandas as pd
+import time
+from loguru import logger
 
-
-load_dotenv(find_dotenv())
-api_key = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=api_key)
-
-gpt = GPT(client=client)
 
 context = """
 
@@ -45,15 +41,40 @@ context = """
                     Best regards\nRenna Wahlt
                     """
                   
-claims_type = gpt.get_claims_type(context)
-print(claims_type)
-cause_type = gpt.get_cause(context, claims_type=claims_type)
-print(cause_type)
-notifier = gpt.get_notifier(context)
-print(notifier)
-date = gpt.get_claims_date(context)
-print(date)
-claims_object = gpt.get_claims_objekt(context)
-print(claims_object)
+# claims_type = gpt.get_claims_type(context)
+# print(claims_type)
+# cause_type = gpt.get_cause(context, claims_type=claims_type)
+# print(cause_type)
+# notifier = gpt.get_notifier(context)
+# print(notifier)
+# date = gpt.get_claims_date(context)
+# print(date)
+# claims_object = gpt.get_claims_objekt(context)
+# print(claims_object)
 
-print(gpt.fde_first_notification_of_loss(context))
+# print(gpt.fde_first_notification_of_loss(context))
+
+df = pd.read_parquet("df_dirk_date_anon.parquet")
+
+start_time = time.time()
+
+logger.info(f"Operation Started at {start_time}")
+
+logger.info(f"connect to OpenAI")
+load_dotenv(find_dotenv())
+api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key)
+gpt = GPT(client=client)
+logger.success("Connected to OpenAI with Key")
+
+doc = df.iloc[3]['text'] 
+
+logger.info("Starting predictions")
+claim = gpt.fde_first_notification_of_loss(doc)
+logger.success(f"Predictions done:{claim}")
+
+end_time = time.time()
+total_time = end_time - start_time
+logger.success(f"Operation done at {end_time}")
+
+logger.info(f"Processing Time: {total_time}")

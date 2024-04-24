@@ -2,7 +2,8 @@ import json
 from loguru import logger
 from dataclasses import dataclass
 import pandas as pd
-
+from typing import List
+from collections import Counter
 
 class GPT:
     def __init__(self, client):
@@ -444,159 +445,222 @@ class FirstNotificationOfLoss:
     schaden_datum: str
 
 
-def group_sd_urs_art(df: pd.DataFrame) -> pd.DataFrame:
-    """Group sd_urs_art into main categories based on sd_typ_kennung.
+    def group_sd_urs_art(df: pd.DataFrame) -> pd.DataFrame:
+        """Group sd_urs_art into main categories based on sd_typ_kennung.
 
-    Args:
-        df: pd.DataFrame to be grouped
+        Args:
+            df: pd.DataFrame to be grouped
 
-    Returns:
-        DataFrame containing main categories for sd_urs_art based on sd_typ_kennung
-    """
-    logger.info("Grouping sd_urs_art and schaden_objekt")
-    list_sub_dfs = [
-        y
-        for x, y in df.groupby(
-            ["sd_typ_kennung", "schaden_objekt"], as_index=False
-        )
-    ]
-
-    result_df_list = []
-
-    for sub_df in list_sub_dfs:
-        if sub_df["sd_typ_kennung"].iloc[0] == "LW":
-            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
-            sub_df.sd_urs_art = sub_df.sd_urs_art.apply(lambda x: x[0])
-            sub_df = sub_df.replace(
-                {"sd_urs_art": {r"^[^0249]*$": "0"}}, regex=True
+        Returns:
+            DataFrame containing main categories for sd_urs_art based on sd_typ_kennung
+        """
+        logger.info("Grouping sd_urs_art and schaden_objekt")
+        list_sub_dfs = [
+            y
+            for x, y in df.groupby(
+                ["sd_typ_kennung", "schaden_objekt"], as_index=False
             )
-            result_df_list.append(sub_df)
+        ]
 
-        elif sub_df["sd_typ_kennung"].iloc[0] == "ST":
-            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
-            sub_df["sd_urs_art"] = (
-                sub_df["sd_urs_art"]
-                .apply(lambda x: x[0] if x not in ["10", "19"] else x)
-                .apply(
-                    lambda x: x
-                    if x in ["0", "1", "10", "19", "4", "7"]
-                    else "1"
+        result_df_list = []
+
+        for sub_df in list_sub_dfs:
+            if sub_df["sd_typ_kennung"].iloc[0] == "LW":
+                sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+                sub_df.sd_urs_art = sub_df.sd_urs_art.apply(lambda x: x[0])
+                sub_df = sub_df.replace(
+                    {"sd_urs_art": {r"^[^0249]*$": "0"}}, regex=True
                 )
-                .apply(lambda x: "10" if x == "1" else x)
-            )
-            result_df_list.append(sub_df)
+                result_df_list.append(sub_df)
 
-        elif sub_df["sd_typ_kennung"].iloc[0] == "EL":
-            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
-            sub_df.sd_urs_art = sub_df.sd_urs_art.apply(lambda x: x[0])
-            sub_df = sub_df.replace(
-                {"sd_urs_art": {r"^.*[^2]$": "0"}}, regex=True, inplace=False
-            )
-            result_df_list.append(sub_df)
+            elif sub_df["sd_typ_kennung"].iloc[0] == "ST":
+                sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+                sub_df["sd_urs_art"] = (
+                    sub_df["sd_urs_art"]
+                    .apply(lambda x: x[0] if x not in ["10", "19"] else x)
+                    .apply(
+                        lambda x: x
+                        if x in ["0", "1", "10", "19", "4", "7"]
+                        else "1"
+                    )
+                    .apply(lambda x: "10" if x == "1" else x)
+                )
+                result_df_list.append(sub_df)
 
-        elif sub_df["sd_typ_kennung"].iloc[0] == "ED":
-            sub_df["sd_urs_art"] = (
-                sub_df["sd_urs_art"]
-                .astype(str)
-                .apply(lambda x: x[0] if x not in ["70", "79"] else x)
-                .apply(lambda x: x if x in ["0", "7", "70", "79"] else "0")
-                .apply(lambda x: "70" if x == "7" else x)
-            )
+            elif sub_df["sd_typ_kennung"].iloc[0] == "EL":
+                sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+                sub_df.sd_urs_art = sub_df.sd_urs_art.apply(lambda x: x[0])
+                sub_df = sub_df.replace(
+                    {"sd_urs_art": {r"^.*[^2]$": "0"}}, regex=True, inplace=False
+                )
+                result_df_list.append(sub_df)
 
-            result_df_list.append(sub_df)
+            elif sub_df["sd_typ_kennung"].iloc[0] == "ED":
+                sub_df["sd_urs_art"] = (
+                    sub_df["sd_urs_art"]
+                    .astype(str)
+                    .apply(lambda x: x[0] if x not in ["70", "79"] else x)
+                    .apply(lambda x: x if x in ["0", "7", "70", "79"] else "0")
+                    .apply(lambda x: "70" if x == "7" else x)
+                )
 
-        elif (
-            sub_df["sd_typ_kennung"].iloc[0] == "GL"
-            and sub_df["schaden_objekt"].iloc[0] == "GL"
-        ):
-            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
-            sub_df["sd_urs_art"] = sub_df["sd_urs_art"].replace("9", "09")
-            sub_df["sd_urs_art"] = sub_df["sd_urs_art"].replace(
-                {"^(?!09$|11$|12$).*$": "00"}, regex=True, inplace=False
-            )
-            result_df_list.append(sub_df)
+                result_df_list.append(sub_df)
 
-        elif sub_df["sd_typ_kennung"].iloc[0] == "GL" and (
-            sub_df["schaden_objekt"].iloc[0] in ["HR", "WG"]
-        ):
-            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
-            sub_df["sd_urs_art"] = "00"
-            result_df_list.append(sub_df)
+            elif (
+                sub_df["sd_typ_kennung"].iloc[0] == "GL"
+                and sub_df["schaden_objekt"].iloc[0] == "GL"
+            ):
+                sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+                sub_df["sd_urs_art"] = sub_df["sd_urs_art"].replace("9", "09")
+                sub_df["sd_urs_art"] = sub_df["sd_urs_art"].replace(
+                    {"^(?!09$|11$|12$).*$": "00"}, regex=True, inplace=False
+                )
+                result_df_list.append(sub_df)
 
-        elif sub_df["sd_typ_kennung"].iloc[0] == "FE":
-            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
-            sub_df.sd_urs_art = sub_df.sd_urs_art.apply(lambda x: x[0]).apply(
-                lambda x: x if x in ["6", "9"] else "0"
-            )
+            elif sub_df["sd_typ_kennung"].iloc[0] == "GL" and (
+                sub_df["schaden_objekt"].iloc[0] in ["HR", "WG"]
+            ):
+                sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+                sub_df["sd_urs_art"] = "00"
+                result_df_list.append(sub_df)
 
-            result_df_list.append(sub_df)
+            elif sub_df["sd_typ_kennung"].iloc[0] == "FE":
+                sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+                sub_df.sd_urs_art = sub_df.sd_urs_art.apply(lambda x: x[0]).apply(
+                    lambda x: x if x in ["6", "9"] else "0"
+                )
 
-        elif (
-            sub_df["sd_typ_kennung"].iloc[0] == "VK"
-            or sub_df["sd_typ_kennung"].iloc[0] == "TK"
-        ):
-            sd_typ_kennung = sub_df["sd_typ_kennung"].iloc[0]
-            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(int)
-            categories = {
-                "VK": {1: [51], 2: [562], 3: [564, 561, 57, 563, 565]},
-                "TK": {
-                    77: [77],
-                    741: [741, 742, 743, 744],
-                    782: [782],
-                    751: [751],
-                    733: [
-                        71,
-                        78,
-                        781,
-                        72,
-                        79,
-                        791,
-                        76,
-                        753,
-                        731,
-                        732,
-                        752,
-                        733,
-                        734,
-                        771,
-                        783,
-                        792,
-                        793,
-                    ],
-                },
-            }
+                result_df_list.append(sub_df)
 
-            categories_mapping = {
-                **{
-                    "VK": {
-                        val: k
-                        for k, l in categories["VK"].items()
-                        for val in l
-                    }
-                },
-                **{
+            elif (
+                sub_df["sd_typ_kennung"].iloc[0] == "VK"
+                or sub_df["sd_typ_kennung"].iloc[0] == "TK"
+            ):
+                sd_typ_kennung = sub_df["sd_typ_kennung"].iloc[0]
+                sub_df.sd_urs_art = sub_df.sd_urs_art.astype(int)
+                categories = {
+                    "VK": {1: [51], 2: [562], 3: [564, 561, 57, 563, 565]},
                     "TK": {
-                        val: k
-                        for k, l in categories["TK"].items()
-                        for val in l
-                    }
-                },
-            }
+                        77: [77],
+                        741: [741, 742, 743, 744],
+                        782: [782],
+                        751: [751],
+                        733: [
+                            71,
+                            78,
+                            781,
+                            72,
+                            79,
+                            791,
+                            76,
+                            753,
+                            731,
+                            732,
+                            752,
+                            733,
+                            734,
+                            771,
+                            783,
+                            792,
+                            793,
+                        ],
+                    },
+                }
 
-            sub_df["sd_urs_art"] = sub_df["sd_urs_art"].map(
-                categories_mapping[sd_typ_kennung]
+                categories_mapping = {
+                    **{
+                        "VK": {
+                            val: k
+                            for k, l in categories["VK"].items()
+                            for val in l
+                        }
+                    },
+                    **{
+                        "TK": {
+                            val: k
+                            for k, l in categories["TK"].items()
+                            for val in l
+                        }
+                    },
+                }
+
+                sub_df["sd_urs_art"] = sub_df["sd_urs_art"].map(
+                    categories_mapping[sd_typ_kennung]
+                )
+                sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+                result_df_list.append(sub_df)
+            else:
+                result_df_list.append(sub_df)
+
+        result_df = pd.concat(result_df_list)
+        result_df = result_df.reset_index(drop=True)
+
+        return result_df
+        
+@dataclass
+class DirksClaims:
+    """
+    A class representing a collection of claims data for Dirk's insurance claims
+     processing.
+
+    Attributes:
+        doc_id_list (List[str]): List of document identifiers for the claims.
+        schaden_objekt_list (List[str]): List of objects involved in the claims.
+        schaden_typ_list (List[str]): List of types of damage involved in the
+        claims.
+        sd_urs_art_list (List[str]): List of cause types for the damages.
+        schaden_datum_list (List[str]): List of dates when the damages occurred.
+
+    The class aggregates information from individual lists into structured
+    claims data using the `FirstNotificationOfLoss` class for each claim entry.
+    """
+
+    doc_id_list: List[str]
+    schaden_objekt_list: List[str]
+    schaden_typ_list: List[str]
+    sd_urs_art_list: List[str]
+    schaden_datum_list: List[str]
+    
+    def __post_init__(self):
+        """
+        Post-initialization processing to convert lists of claims data into a
+        list of `FirstNotificationOfLoss` objects.
+
+        This method automatically runs after the class is instantiated to bundle
+        the provided claims lists into structured objects. It iterates over the
+        combined entries of all provided lists and creates a
+        `FirstNotificationOfLoss` object for each set of entries.
+
+        Raises:
+            ValueError: If the lengths of the input lists do not match,
+                indicating inconsistent data which cannot be correctly paired
+                into claims.
+        """
+        if not all(
+            len(lst) == len(self.doc_id_list)
+            for lst in [
+                self.schaden_objekt_list,
+                self.schaden_typ_list,
+                self.sd_urs_art_list,
+                self.schaden_datum_list,
+            ]
+        ):
+            raise ValueError("All input lists must have the same length.")
+
+        self.info = [
+            FirstNotificationOfLoss(
+                doc_id=doc_id,
+                schaden_objekt=schaden_objekt,
+                schaden_typ=schaden_typ,
+                sd_urs_art=sd_urs_art,
+                schaden_datum=schaden_datum,
             )
-            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
-            result_df_list.append(sub_df)
-        else:
-            result_df_list.append(sub_df)
-
-    result_df = pd.concat(result_df_list)
-    result_df = result_df.reset_index(drop=True)
-
-    return result_df
-    
-    
-            
-            
-            
+            for doc_id, schaden_objekt, schaden_typ, sd_urs_art, schaden_datum in zip(
+                self.doc_id_list,
+                self.schaden_objekt_list,
+                self.schaden_typ_list,
+                self.sd_urs_art_list,
+                self.schaden_datum_list,
+            )
+        ]
+               
