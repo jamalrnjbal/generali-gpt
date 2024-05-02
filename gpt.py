@@ -65,7 +65,7 @@ class GPT:
         ]
 
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo-0125",
+            model="gpt-4-turbo",
             response_format={ "type": "json_object" },
             messages=messages
         )
@@ -402,7 +402,7 @@ class GPT:
         else:
             cause_description = None
 
-        claims_object = self.get_claims_objekt(document).strip()
+        claims_object = self.get_claims_objekt(document)
         cause_alphanumerical = self.cause_mapper(
             claims_object=claims_object,
             claims_type=claims_type,
@@ -412,7 +412,7 @@ class GPT:
         result = {
             "type": claims_type,
             "cause": cause_alphanumerical,
-            "notifier": self.get_notifier(document).strip(),
+            "notifier": self.get_notifier(document),
             "date": self.get_claims_date(document),
             "objekt": claims_object,
         }
@@ -664,3 +664,155 @@ class DirksClaims:
             )
         ]
                
+
+def group_sd_urs_art(df: pd.DataFrame) -> pd.DataFrame:
+    """Group sd_urs_art into main categories based on sd_typ_kennung.
+
+    Args:
+        df: pd.DataFrame to be grouped
+
+    Returns:
+        DataFrame containing main categories for sd_urs_art based on sd_typ_kennung
+    """
+    logger.info("Grouping sd_urs_art and schaden_objekt")
+    list_sub_dfs = [
+        y
+        for x, y in df.groupby(
+            ["sd_typ_kennung", "schaden_objekt"], as_index=False
+        )
+    ]
+
+    result_df_list = []
+
+    for sub_df in list_sub_dfs:
+        if sub_df["sd_typ_kennung"].iloc[0] == "LW":
+            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+            sub_df.sd_urs_art = sub_df.sd_urs_art.apply(lambda x: x[0])
+            sub_df = sub_df.replace(
+                {"sd_urs_art": {r"^[^0249]*$": "0"}}, regex=True
+            )
+            result_df_list.append(sub_df)
+
+        elif sub_df["sd_typ_kennung"].iloc[0] == "ST":
+            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+            sub_df["sd_urs_art"] = (
+                sub_df["sd_urs_art"]
+                .apply(lambda x: x[0] if x not in ["10", "19"] else x)
+                .apply(
+                    lambda x: x
+                    if x in ["0", "1", "10", "19", "4", "7"]
+                    else "1"
+                )
+                .apply(lambda x: "10" if x == "1" else x)
+            )
+            result_df_list.append(sub_df)
+
+        elif sub_df["sd_typ_kennung"].iloc[0] == "EL":
+            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+            sub_df.sd_urs_art = sub_df.sd_urs_art.apply(lambda x: x[0])
+            sub_df = sub_df.replace(
+                {"sd_urs_art": {r"^.*[^2]$": "0"}}, regex=True, inplace=False
+            )
+            result_df_list.append(sub_df)
+
+        elif sub_df["sd_typ_kennung"].iloc[0] == "ED":
+            sub_df["sd_urs_art"] = (
+                sub_df["sd_urs_art"]
+                .astype(str)
+                .apply(lambda x: x[0] if x not in ["70", "79"] else x)
+                .apply(lambda x: x if x in ["0", "7", "70", "79"] else "0")
+                .apply(lambda x: "70" if x == "7" else x)
+            )
+
+            result_df_list.append(sub_df)
+
+        elif (
+            sub_df["sd_typ_kennung"].iloc[0] == "GL"
+            and sub_df["schaden_objekt"].iloc[0] == "GL"
+        ):
+            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+            sub_df["sd_urs_art"] = sub_df["sd_urs_art"].replace("9", "09")
+            sub_df["sd_urs_art"] = sub_df["sd_urs_art"].replace(
+                {"^(?!09$|11$|12$).*$": "00"}, regex=True, inplace=False
+            )
+            result_df_list.append(sub_df)
+
+        elif sub_df["sd_typ_kennung"].iloc[0] == "GL" and (
+            sub_df["schaden_objekt"].iloc[0] in ["HR", "WG"]
+        ):
+            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+            sub_df["sd_urs_art"] = "00"
+            result_df_list.append(sub_df)
+
+        elif sub_df["sd_typ_kennung"].iloc[0] == "FE":
+            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+            sub_df.sd_urs_art = sub_df.sd_urs_art.apply(lambda x: x[0]).apply(
+                lambda x: x if x in ["6", "9"] else "0"
+            )
+
+            result_df_list.append(sub_df)
+
+        elif (
+            sub_df["sd_typ_kennung"].iloc[0] == "VK"
+            or sub_df["sd_typ_kennung"].iloc[0] == "TK"
+        ):
+            sd_typ_kennung = sub_df["sd_typ_kennung"].iloc[0]
+            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(int)
+            categories = {
+                "VK": {1: [51], 2: [562], 3: [564, 561, 57, 563, 565]},
+                "TK": {
+                    77: [77],
+                    741: [741, 742, 743, 744],
+                    782: [782],
+                    751: [751],
+                    733: [
+                        71,
+                        78,
+                        781,
+                        72,
+                        79,
+                        791,
+                        76,
+                        753,
+                        731,
+                        732,
+                        752,
+                        733,
+                        734,
+                        771,
+                        783,
+                        792,
+                        793,
+                    ],
+                },
+            }
+
+            categories_mapping = {
+                **{
+                    "VK": {
+                        val: k
+                        for k, l in categories["VK"].items()
+                        for val in l
+                    }
+                },
+                **{
+                    "TK": {
+                        val: k
+                        for k, l in categories["TK"].items()
+                        for val in l
+                    }
+                },
+            }
+
+            sub_df["sd_urs_art"] = sub_df["sd_urs_art"].map(
+                categories_mapping[sd_typ_kennung]
+            )
+            sub_df.sd_urs_art = sub_df.sd_urs_art.astype(str)
+            result_df_list.append(sub_df)
+        else:
+            result_df_list.append(sub_df)
+
+    result_df = pd.concat(result_df_list)
+    result_df = result_df.reset_index(drop=True)
+
+    return result_df
